@@ -11,7 +11,7 @@ This repository uses a tiered rules model so preferences and hard requirements d
 ## How to use this corpus
 
 1. Start with the core standards.
-2. Load only the language packs that apply to the repository.
+2. Read any language-specific guidance that applies to the repository or task.
 3. Copy the thin local templates into the downstream repo.
 4. Document repo-specific exceptions instead of silently drifting.
 
@@ -21,7 +21,7 @@ This repository uses a tiered rules model so preferences and hard requirements d
 - [Code Shape](core/code-shape.md)
 - [Testing](core/testing.md)
 
-## Language packs
+## Language-specific guidance
 
 - [Rust](languages/rust.md)
 - [TypeScript / JavaScript](languages/typescript-javascript.md)

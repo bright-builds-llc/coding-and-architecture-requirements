@@ -6,6 +6,25 @@ This repository is a versioned policy and adoption kit for a personal, opinionat
 - Teams can copy thin local templates into their own repositories.
 - Codex users can opt into a thin skill that points back to the canonical docs.
 
+## Quick install
+
+Run these from the root of the downstream repository that should adopt the standards.
+
+Install the generic downstream adoption layer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bright-builds-llc/coding-and-architecture-requirements/main/scripts/manage-downstream.sh | bash -s -- install --ref main
+```
+
+Check or refresh an existing install:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bright-builds-llc/coding-and-architecture-requirements/main/scripts/manage-downstream.sh | bash -s -- status
+curl -fsSL https://raw.githubusercontent.com/bright-builds-llc/coding-and-architecture-requirements/main/scripts/manage-downstream.sh | bash -s -- update --ref main
+```
+
+The manager installs `AGENTS.md`, `CONTRIBUTING.md`, `standards-overrides.md`, and `.github/pull_request_template.md`. Prefer replacing `main` with a tag or commit SHA once you start cutting releases.
+
 ## Repository layout
 
 ```text
@@ -26,20 +45,34 @@ This repository is a versioned policy and adoption kit for a personal, opinionat
 - Core architecture: [standards/core/architecture.md](standards/core/architecture.md)
 - Code shape: [standards/core/code-shape.md](standards/core/code-shape.md)
 - Testing: [standards/core/testing.md](standards/core/testing.md)
-- Rust language pack: [standards/languages/rust.md](standards/languages/rust.md)
-- TypeScript/JavaScript language pack: [standards/languages/typescript-javascript.md](standards/languages/typescript-javascript.md)
+- Rust guidance: [standards/languages/rust.md](standards/languages/rust.md)
+- TypeScript/JavaScript guidance: [standards/languages/typescript-javascript.md](standards/languages/typescript-javascript.md)
 - Downstream adoption templates: [templates/AGENTS.md](templates/AGENTS.md)
 - Optional Codex skill: [skills/personal-coding-standards/SKILL.md](skills/personal-coding-standards/SKILL.md)
 
 ## Adoption flow
 
-1. Read [standards/index.md](standards/index.md) and select the language packs you need.
-2. Copy the files in `templates/` into the downstream repository.
+1. Read [standards/index.md](standards/index.md) and any language-specific guidance relevant to the repository.
+2. Run the downstream manager or copy the files in `templates/` into the downstream repository.
 3. Pin the downstream repo to a tagged release or commit from this repository.
 4. Record any repo-specific deviations in the downstream `standards-overrides.md`.
 5. Optionally use the Codex skill to bootstrap adoption or review work against the standards.
 
 The intended downstream footprint is small: a local `AGENTS.md`, a local `CONTRIBUTING.md`, an overrides file, and a PR template. The canonical standards remain here.
+
+## Uninstall
+
+Remove the managed files from a downstream repository while keeping any local override history:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bright-builds-llc/coding-and-architecture-requirements/main/scripts/manage-downstream.sh | bash -s -- uninstall
+```
+
+Also remove `standards-overrides.md` if the downstream repository no longer needs it:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bright-builds-llc/coding-and-architecture-requirements/main/scripts/manage-downstream.sh | bash -s -- uninstall --remove-overrides
+```
 
 ## Versioning and releases
 
@@ -53,7 +86,7 @@ Treat this repository like a policy product:
 Suggested convention:
 
 - Major: rule meaning changes in a way that would force downstream repos to revisit adoption.
-- Minor: new guidance, new examples, or new optional language packs.
+- Minor: new guidance, new examples, or new optional language-specific standards.
 - Patch: wording fixes, broken links, and template clarifications.
 
 ## Verification

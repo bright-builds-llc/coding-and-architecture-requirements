@@ -15,7 +15,7 @@ Use this file as the starting point for a downstream repository's contribution g
 - Prefer early returns and shallow control flow.
 - Split oversized functions and files into sensible units.
 - Parse boundary input into domain types when that removes repeated validation.
-- In TypeScript/JavaScript, prefer composition over inheritance for our own types.
+- Apply any relevant language-specific guidance from the pinned canonical standards.
 
 ## Test expectations
 

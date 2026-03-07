@@ -14,7 +14,7 @@ Use this skill when the user wants to:
 ## Workflow
 
 1. Read `../../standards/index.md`.
-2. Load only the standards pages that match the task and language.
+2. Load the standards pages that match the task, including language-specific guidance when it is relevant.
 3. Treat `../../standards/` as canonical. Do not duplicate or invent rules that are not present there.
 4. For bootstrap work, start from the files in `../../templates/` and adapt them to the target repository.
 5. For review work, classify deviations according to the standards' `must`, `should`, and `may` levels.
@@ -26,8 +26,8 @@ Use this skill when the user wants to:
 - Core architecture: `../../standards/core/architecture.md`
 - Code shape: `../../standards/core/code-shape.md`
 - Testing: `../../standards/core/testing.md`
-- Rust language pack: `../../standards/languages/rust.md`
-- TypeScript/JavaScript language pack: `../../standards/languages/typescript-javascript.md`
+- Rust guidance: `../../standards/languages/rust.md`
+- TypeScript/JavaScript guidance: `../../standards/languages/typescript-javascript.md`
 - Downstream templates: `../../templates/`
 
 ## Output expectations

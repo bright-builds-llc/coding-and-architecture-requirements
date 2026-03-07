@@ -1,6 +1,6 @@
 # Rust
 
-This language pack translates the core standards into Rust-specific guidance.
+This page translates the core standards into Rust-specific guidance.
 
 ## Use `let...else` for Guard-Style Extraction
 

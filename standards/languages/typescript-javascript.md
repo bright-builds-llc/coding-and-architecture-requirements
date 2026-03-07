@@ -1,6 +1,6 @@
 # TypeScript and JavaScript
 
-This language pack translates the core standards into TypeScript/JavaScript-specific guidance.
+This page translates the core standards into TypeScript/JavaScript-specific guidance.
 
 ## Prefer Composition Over Class Inheritance
 

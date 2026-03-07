@@ -8,6 +8,8 @@ This repository uses a simple release-notes model instead of a heavyweight chang
 - Downstream adoption templates for `AGENTS.md`, `CONTRIBUTING.md`, overrides, and PRs
 - Optional Codex skill for applying or reviewing against the standards
 - Docs verification script and Markdown lint configuration
+- Downstream management script plus README one-liners for install, update, status, and uninstall
+- Generic downstream installation flow with language-agnostic templates and docs
 
 ## Release note guidance
 
