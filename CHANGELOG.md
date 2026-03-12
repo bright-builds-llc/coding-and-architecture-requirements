@@ -10,6 +10,7 @@ This repository uses a simple release-notes model instead of a heavyweight chang
 - Docs verification script and Markdown lint configuration
 - Downstream management script plus README one-liners for install, update, status, and uninstall
 - Generic downstream installation flow with language-agnostic templates and docs
+- Hidden breadcrumb comments plus a visible audit manifest for downstream installs and partial uninstalls
 
 ## Release note guidance
 

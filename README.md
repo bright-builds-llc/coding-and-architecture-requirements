@@ -1,5 +1,7 @@
 # Personal Coding and Architecture Requirements
 
+[![GitHub Stars](https://img.shields.io/github/stars/bright-builds-llc/coding-and-architecture-requirements)](https://github.com/bright-builds-llc/coding-and-architecture-requirements)
+
 This repository is a versioned policy and adoption kit for a personal, opinionated coding style. It is designed to work for both humans and AI agents:
 
 - Humans can read a small set of canonical standards documents.
@@ -23,7 +25,38 @@ curl -fsSL https://raw.githubusercontent.com/bright-builds-llc/coding-and-archit
 curl -fsSL https://raw.githubusercontent.com/bright-builds-llc/coding-and-architecture-requirements/main/scripts/manage-downstream.sh | bash -s -- update --ref main
 ```
 
-The manager installs `AGENTS.md`, `CONTRIBUTING.md`, `standards-overrides.md`, and `.github/pull_request_template.md`. Prefer replacing `main` with a tag or commit SHA once you start cutting releases.
+The manager installs `AGENTS.md`, `CONTRIBUTING.md`, `standards-overrides.md`, `.github/pull_request_template.md`, and `coding-and-architecture-requirements.audit.md`. Prefer replacing `main` with a tag or commit SHA once you start cutting releases.
+
+## Breadcrumbs and Audit Trail
+
+Every managed Markdown file installed by the downstream manager begins with a hidden HTML comment block marked by:
+
+- `<!-- coding-and-architecture-requirements:begin -->`
+- `<!-- coding-and-architecture-requirements:end -->`
+
+That hidden block records the source repository URL, pinned version/ref, canonical entrypoint URL, and the path to `coding-and-architecture-requirements.audit.md`.
+
+The visible `coding-and-architecture-requirements.audit.md` file is the main paper trail. It records:
+
+- which repository these requirements came from
+- which revision is pinned
+- which managed files are currently present
+- which install/update/uninstall action most recently touched the downstream repo
+- when that action last ran in UTC
+
+These breadcrumbs exist to make downstream debugging and auditing more intuitive for both humans and tools. They make it easy to answer:
+
+- where did these requirements come from?
+- which revision is this repo pinned to?
+- what did the downstream manager last install, update, or intentionally leave behind?
+
+Behavior by command:
+
+- `install` writes the managed files, hidden breadcrumb comments, and the audit manifest
+- `update` refreshes the managed files, breadcrumb comments, and audit manifest
+- `status` reads from the audit manifest when present and falls back to `AGENTS.md` for older installs
+- `uninstall` removes `AGENTS.md`, `CONTRIBUTING.md`, and the PR template, but intentionally keeps `standards-overrides.md` and `coding-and-architecture-requirements.audit.md` so the paper trail remains
+- `uninstall --remove-overrides` removes both `standards-overrides.md` and `coding-and-architecture-requirements.audit.md`
 
 ## Repository layout
 
@@ -62,13 +95,13 @@ The intended downstream footprint is small: a local `AGENTS.md`, a local `CONTRI
 
 ## Uninstall
 
-Remove the managed files from a downstream repository while keeping any local override history:
+Remove the main managed files from a downstream repository while preserving the local override history and audit trail:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/bright-builds-llc/coding-and-architecture-requirements/main/scripts/manage-downstream.sh | bash -s -- uninstall
 ```
 
-Also remove `standards-overrides.md` if the downstream repository no longer needs it:
+Also remove `standards-overrides.md` and `coding-and-architecture-requirements.audit.md` if the downstream repository no longer needs any local trace of the installation:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/bright-builds-llc/coding-and-architecture-requirements/main/scripts/manage-downstream.sh | bash -s -- uninstall --remove-overrides

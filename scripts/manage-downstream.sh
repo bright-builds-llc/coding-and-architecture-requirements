@@ -9,12 +9,49 @@ managed_pairs=(
   "templates/CONTRIBUTING.md|CONTRIBUTING.md"
   "templates/pull_request_template.md|.github/pull_request_template.md"
 )
+managed_paths=(
+  "AGENTS.md"
+  "CONTRIBUTING.md"
+  ".github/pull_request_template.md"
+  "standards-overrides.md"
+  "coding-and-architecture-requirements.audit.md"
+)
+install_blocking_paths=(
+  "AGENTS.md"
+  "CONTRIBUTING.md"
+  ".github/pull_request_template.md"
+  "coding-and-architecture-requirements.audit.md"
+)
+default_uninstall_paths=(
+  "AGENTS.md"
+  "CONTRIBUTING.md"
+  ".github/pull_request_template.md"
+)
 
 overrides_source="templates/standards-overrides.md"
 overrides_destination="standards-overrides.md"
+audit_source="templates/coding-and-architecture-requirements.audit.md"
+audit_destination="coding-and-architecture-requirements.audit.md"
+breadcrumb_begin="<!-- coding-and-architecture-requirements:begin -->"
+breadcrumb_end="<!-- coding-and-architecture-requirements:end -->"
 tmp_dir=""
 script_dir=""
 local_source_root=""
+current_source=""
+current_ref=""
+current_entrypoint=""
+repo_slug=""
+repo_url=""
+ref=""
+repo_root="$(pwd)"
+standards_index_url=""
+raw_base=""
+last_operation=""
+last_updated_utc=""
+force=0
+remove_overrides=0
+repo_was_explicit=0
+ref_was_explicit=0
 
 cleanup() {
   if [[ -n "$tmp_dir" && -d "$tmp_dir" ]]; then
@@ -60,8 +97,35 @@ require_command() {
   command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
 }
 
-escape_sed_replacement() {
-  printf '%s' "$1" | sed -e 's/[&|\\]/\\&/g'
+utc_now() {
+  date -u +"%Y-%m-%dT%H:%M:%SZ"
+}
+
+ensure_tmp_dir() {
+  if [[ -z "$tmp_dir" || ! -d "$tmp_dir" ]]; then
+    tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/coding-reqs.XXXXXX")"
+  fi
+}
+
+build_managed_files_markdown() {
+  local output=""
+  local path=""
+
+  if [[ "$#" -eq 0 ]]; then
+    printf '%s' "- No managed files are currently tracked."
+    return
+  fi
+
+  for path in "$@"; do
+    if [[ -n "$output" ]]; then
+      output="${output}
+"
+    fi
+
+    output="${output}- \`${path}\`"
+  done
+
+  printf '%s' "$output"
 }
 
 extract_markdown_value() {
@@ -88,6 +152,17 @@ extract_repo_slug_from_url() {
   printf '%s' "$repo_url" | sed -n 's#^https://github.com/\(.*\)$#\1#p' | sed 's#/$##'
 }
 
+render_breadcrumb_block() {
+  cat <<EOF
+${breadcrumb_begin}
+<!-- source-repository: ${repo_url} -->
+<!-- version-pin: ${ref} -->
+<!-- canonical-entrypoint: ${standards_index_url} -->
+<!-- audit-manifest: ${audit_destination} -->
+${breadcrumb_end}
+EOF
+}
+
 download_file() {
   local source_path="$1"
   local output_path="$2"
@@ -104,73 +179,173 @@ download_file() {
   curl -fsSL "${raw_base}/${source_path}" -o "$output_path"
 }
 
-render_agents_template() {
+render_template_file() {
   local source_path="$1"
   local output_path="$2"
-  local repo_url_escaped=""
-  local ref_escaped=""
-  local standards_index_url_escaped=""
+  local managed_files_markdown="${3:-}"
+  local line=""
 
-  repo_url_escaped="$(escape_sed_replacement "$repo_url")"
-  ref_escaped="$(escape_sed_replacement "$ref")"
-  standards_index_url_escaped="$(escape_sed_replacement "$standards_index_url")"
+  {
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      if [[ "$line" == "REPLACE_WITH_MANAGED_FILES_LIST" ]]; then
+        printf '%s\n' "$managed_files_markdown"
+        continue
+      fi
 
-  sed \
-    -e "s|REPLACE_WITH_REPO_URL|${repo_url_escaped}|g" \
-    -e "s|REPLACE_WITH_TAG_OR_COMMIT|${ref_escaped}|g" \
-    -e "s|REPLACE_WITH_TAGGED_STANDARDS_INDEX_URL|${standards_index_url_escaped}|g" \
-    "$source_path" > "$output_path"
+      line="${line//REPLACE_WITH_REPO_URL/$repo_url}"
+      line="${line//REPLACE_WITH_TAG_OR_COMMIT/$ref}"
+      line="${line//REPLACE_WITH_TAGGED_STANDARDS_INDEX_URL/$standards_index_url}"
+      line="${line//REPLACE_WITH_AUDIT_MANIFEST_PATH/$audit_destination}"
+      line="${line//REPLACE_WITH_LAST_OPERATION/$last_operation}"
+      line="${line//REPLACE_WITH_LAST_UPDATED_UTC/$last_updated_utc}"
+      printf '%s\n' "$line"
+    done < "$source_path"
+  } > "$output_path"
 }
 
-write_managed_file() {
+write_rendered_file() {
   local source_path="$1"
   local relative_destination="$2"
+  local managed_files_markdown="${3:-}"
   local destination_path="${repo_root}/${relative_destination}"
-  local downloaded_path="${tmp_dir}/$(basename "$source_path")"
+  local downloaded_path=""
+  local rendered_path=""
 
+  ensure_tmp_dir
+  downloaded_path="${tmp_dir}/$(basename "$source_path")"
+  rendered_path="${tmp_dir}/$(basename "$source_path").rendered"
   download_file "$source_path" "$downloaded_path"
+  render_template_file "$downloaded_path" "$rendered_path" "$managed_files_markdown"
   mkdir -p "$(dirname "$destination_path")"
-
-  if [[ "$relative_destination" == "AGENTS.md" ]]; then
-    render_agents_template "$downloaded_path" "$destination_path"
-  else
-    cp "$downloaded_path" "$destination_path"
-  fi
-
+  cp "$rendered_path" "$destination_path"
   note "Wrote ${relative_destination}"
 }
 
-install_or_update() {
-  local pair=""
+file_has_breadcrumb_block() {
+  local file_path="$1"
 
-  tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/coding-reqs.XXXXXX")"
+  grep -Fqx "$breadcrumb_begin" "$file_path" && grep -Fqx "$breadcrumb_end" "$file_path"
+}
 
-  for pair in "${managed_pairs[@]}"; do
-    local source_path=""
-    local relative_destination=""
+replace_breadcrumb_block() {
+  local input_path="$1"
+  local output_path="$2"
+  local in_block=0
+  local line=""
 
-    IFS='|' read -r source_path relative_destination <<< "$pair"
-    write_managed_file "$source_path" "$relative_destination"
-  done
+  {
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      if [[ "$line" == "$breadcrumb_begin" ]]; then
+        render_breadcrumb_block
+        in_block=1
+        continue
+      fi
 
-  if [[ ! -f "${repo_root}/${overrides_destination}" ]]; then
-    write_managed_file "$overrides_source" "$overrides_destination"
+      if [[ "$in_block" -eq 1 ]]; then
+        if [[ "$line" == "$breadcrumb_end" ]]; then
+          in_block=0
+        fi
+        continue
+      fi
+
+      printf '%s\n' "$line"
+    done < "$input_path"
+  } > "$output_path"
+}
+
+prepend_breadcrumb_block() {
+  local input_path="$1"
+  local output_path="$2"
+
+  {
+    render_breadcrumb_block
+    printf '\n'
+    cat "$input_path"
+  } > "$output_path"
+}
+
+sync_overrides_file() {
+  local destination_path="${repo_root}/${overrides_destination}"
+  local updated_path=""
+
+  if [[ ! -f "$destination_path" ]]; then
+    write_rendered_file "$overrides_source" "$overrides_destination"
+    return
+  fi
+
+  ensure_tmp_dir
+  updated_path="${tmp_dir}/$(basename "$overrides_destination").updated"
+
+  if file_has_breadcrumb_block "$destination_path"; then
+    replace_breadcrumb_block "$destination_path" "$updated_path"
   else
-    note "Kept existing ${overrides_destination}"
+    prepend_breadcrumb_block "$destination_path" "$updated_path"
+  fi
+
+  cp "$updated_path" "$destination_path"
+  note "Updated ${overrides_destination}"
+}
+
+write_audit_manifest() {
+  local operation="$1"
+  shift
+
+  last_operation="$operation"
+  last_updated_utc="$(utc_now)"
+  write_rendered_file "$audit_source" "$audit_destination" "$(build_managed_files_markdown "$@")"
+}
+
+resolve_current_install_metadata() {
+  current_source=""
+  current_ref=""
+  current_entrypoint=""
+
+  if [[ -f "${repo_root}/${audit_destination}" ]]; then
+    current_source="$(extract_markdown_value "${repo_root}/${audit_destination}" "Source repository")"
+    current_ref="$(extract_markdown_value "${repo_root}/${audit_destination}" "Version pin")"
+    current_entrypoint="$(extract_markdown_value "${repo_root}/${audit_destination}" "Canonical entrypoint")"
+  fi
+
+  if [[ -f "${repo_root}/AGENTS.md" ]]; then
+    if [[ -z "$current_source" ]]; then
+      current_source="$(extract_markdown_value "${repo_root}/AGENTS.md" "Standards repository")"
+    fi
+
+    if [[ -z "$current_ref" ]]; then
+      current_ref="$(extract_markdown_value "${repo_root}/AGENTS.md" "Version pin")"
+    fi
+
+    if [[ -z "$current_entrypoint" ]]; then
+      current_entrypoint="$(extract_markdown_value "${repo_root}/AGENTS.md" "Canonical entrypoint")"
+    fi
   fi
 }
 
-status() {
+install_or_update() {
+  local operation="$1"
   local pair=""
+  local source_path=""
+  local relative_destination=""
+
+  for pair in "${managed_pairs[@]}"; do
+    IFS='|' read -r source_path relative_destination <<< "$pair"
+    write_rendered_file "$source_path" "$relative_destination"
+  done
+
+  sync_overrides_file
+  write_audit_manifest "$operation" "${managed_paths[@]}"
+}
+
+status() {
+  local relative_destination=""
+  local display_source="$current_source"
+  local display_ref="$current_ref"
 
   note "Target repository: ${repo_root}"
 
-  for pair in "${managed_pairs[@]}"; do
-    local source_path=""
-    local relative_destination=""
+  for relative_destination in "${managed_paths[@]}"; do
     local destination_path=""
 
-    IFS='|' read -r source_path relative_destination <<< "$pair"
     destination_path="${repo_root}/${relative_destination}"
 
     if [[ -f "$destination_path" ]]; then
@@ -180,38 +355,32 @@ status() {
     fi
   done
 
-  if [[ -f "${repo_root}/${overrides_destination}" ]]; then
-    note "[present] ${overrides_destination}"
-  else
-    note "[missing] ${overrides_destination}"
+  if [[ -z "$display_source" && -n "$repo_url" ]]; then
+    display_source="$repo_url"
   fi
 
-  if [[ -f "${repo_root}/AGENTS.md" ]]; then
-    local current_source=""
-    local current_ref=""
+  if [[ -z "$display_ref" && -n "$ref" ]]; then
+    display_ref="$ref"
+  fi
 
-    current_source="$(extract_markdown_value "${repo_root}/AGENTS.md" "Standards repository")"
-    current_ref="$(extract_markdown_value "${repo_root}/AGENTS.md" "Version pin")"
-
-    if [[ -n "$current_source" ]]; then
-      note "Pinned source: ${current_source}"
+  if [[ -n "$current_source" || -n "$current_ref" || -f "${repo_root}/${audit_destination}" || -f "${repo_root}/AGENTS.md" ]]; then
+    if [[ -n "$display_source" ]]; then
+      note "Pinned source: ${display_source}"
     fi
 
-    if [[ -n "$current_ref" ]]; then
-      note "Pinned ref: ${current_ref}"
+    if [[ -n "$display_ref" ]]; then
+      note "Pinned ref: ${display_ref}"
     fi
   fi
 }
 
 uninstall() {
-  local pair=""
+  local relative_destination=""
+  local remaining_paths=()
 
-  for pair in "${managed_pairs[@]}"; do
-    local source_path=""
-    local relative_destination=""
+  for relative_destination in "${default_uninstall_paths[@]}"; do
     local destination_path=""
 
-    IFS='|' read -r source_path relative_destination <<< "$pair"
     destination_path="${repo_root}/${relative_destination}"
 
     if [[ -f "$destination_path" ]]; then
@@ -220,9 +389,23 @@ uninstall() {
     fi
   done
 
-  if [[ "$remove_overrides" -eq 1 && -f "${repo_root}/${overrides_destination}" ]]; then
-    rm -f "${repo_root}/${overrides_destination}"
-    note "Removed ${overrides_destination}"
+  if [[ "$remove_overrides" -eq 1 ]]; then
+    if [[ -f "${repo_root}/${overrides_destination}" ]]; then
+      rm -f "${repo_root}/${overrides_destination}"
+      note "Removed ${overrides_destination}"
+    fi
+
+    if [[ -f "${repo_root}/${audit_destination}" ]]; then
+      rm -f "${repo_root}/${audit_destination}"
+      note "Removed ${audit_destination}"
+    fi
+  else
+    if [[ -f "${repo_root}/${overrides_destination}" ]]; then
+      remaining_paths+=("${overrides_destination}")
+    fi
+
+    remaining_paths+=("${audit_destination}")
+    write_audit_manifest "partial-uninstall" "${remaining_paths[@]}"
   fi
 
   rmdir "${repo_root}/.github" 2>/dev/null || true
@@ -244,14 +427,6 @@ if [[ -z "$command_name" || "$command_name" == "-h" || "$command_name" == "--hel
 fi
 
 shift
-
-repo_slug=""
-ref=""
-repo_root="$(pwd)"
-force=0
-remove_overrides=0
-repo_was_explicit=0
-ref_was_explicit=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -293,23 +468,18 @@ done
 [[ -d "$repo_root" ]] || die "repo root does not exist: $repo_root"
 repo_root="$(cd "$repo_root" && pwd)"
 
-agents_path="${repo_root}/AGENTS.md"
+resolve_current_install_metadata
 
-if [[ "$command_name" == "update" && -f "$agents_path" ]]; then
-  current_source="$(extract_markdown_value "$agents_path" "Standards repository")"
-  current_ref="$(extract_markdown_value "$agents_path" "Version pin")"
+if [[ "$repo_was_explicit" -eq 0 && -n "$current_source" ]]; then
+  maybe_repo_slug="$(extract_repo_slug_from_url "$current_source")"
 
-  if [[ "$repo_was_explicit" -eq 0 && -n "$current_source" ]]; then
-    maybe_repo_slug="$(extract_repo_slug_from_url "$current_source")"
-
-    if [[ -n "$maybe_repo_slug" ]]; then
-      repo_slug="$maybe_repo_slug"
-    fi
+  if [[ -n "$maybe_repo_slug" ]]; then
+    repo_slug="$maybe_repo_slug"
   fi
+fi
 
-  if [[ "$ref_was_explicit" -eq 0 && -n "$current_ref" ]]; then
-    ref="$current_ref"
-  fi
+if [[ "$ref_was_explicit" -eq 0 && -n "$current_ref" ]]; then
+  ref="$current_ref"
 fi
 
 if [[ -z "$repo_slug" ]]; then
@@ -327,9 +497,9 @@ standards_index_url="${repo_url}/blob/${ref}/standards/index.md"
 case "$command_name" in
   install)
     existing_managed_files=()
+    relative_destination=""
 
-    for pair in "${managed_pairs[@]}"; do
-      IFS='|' read -r source_path relative_destination <<< "$pair"
+    for relative_destination in "${install_blocking_paths[@]}"; do
       if [[ -f "${repo_root}/${relative_destination}" ]]; then
         existing_managed_files+=("$relative_destination")
       fi
@@ -339,11 +509,11 @@ case "$command_name" in
       die "managed files already exist: ${existing_managed_files[*]}. Re-run with --force or use update."
     fi
 
-    install_or_update
+    install_or_update "install"
     note "Pinned canonical standards to ${repo_url} @ ${ref}"
     ;;
   update)
-    install_or_update
+    install_or_update "update"
     note "Updated canonical standards pin to ${repo_url} @ ${ref}"
     ;;
   status)
