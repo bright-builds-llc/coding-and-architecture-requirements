@@ -114,6 +114,47 @@ handleCheckout()
 - Review questions: Does the function still represent a single concern? Could named helpers reveal the workflow better than comments or blank lines?
 - Automation potential: Length checks are easy to automate, but whether the split is sensible still requires review.
 
+## Keep Workflow Config Thin And Extract Non-Trivial Scripts
+
+- Level: `should`
+- Intent: Keep automation config readable and make non-trivial workflow logic locally runnable, reusable, and testable.
+- Rule: Keep workflow or automation YAML focused on orchestration. When a workflow step grows into non-trivial script logic such as multiline shell with branching, loops, parsing, reusable logic, or more than trivial glue, extract it into a checked-in script or language-native entrypoint in a sensible repo location like `scripts/`, `tools/`, or the relevant package.
+- Rationale: Inline workflow scripts are hard to review, awkward to debug locally, and easy to duplicate across jobs. Extracted scripts can be named, tested, linted, reused, and run outside the CI system.
+- Good example:
+
+```yaml
+- name: Verify docs
+  run: ./scripts/verify-docs.sh
+```
+
+- Bad example:
+
+```yaml
+- name: Verify docs
+  run: |
+    set -euo pipefail
+    changed=0
+    for path in README.md standards/**/*.md templates/**/*.md; do
+      if [[ ! -f "$path" ]]; then
+        continue
+      fi
+      npx markdownlint-cli2 "$path"
+      if grep -q "TODO" "$path"; then
+        changed=1
+      fi
+    done
+
+    if [[ "$changed" -eq 1 ]]; then
+      python3 scripts/check-links.py --strict
+    else
+      python3 scripts/check-links.py
+    fi
+```
+
+- Exceptions or escape hatches: Short glue commands, obvious one-liners, or tiny invocations of existing tools may stay inline. If a reusable composite action or existing third-party action is clearer than a local script, prefer the clearer abstraction.
+- Review questions: Is this YAML still orchestration, or is it hiding script logic? Would the logic be easier to reuse, test, lint, or run locally from `scripts/`, `tools/`, or a language-native entrypoint?
+- Automation potential: Linters can flag large multiline `run:` blocks, but deciding when the logic has crossed from glue into a script still needs reviewer judgment.
+
 ## Split Oversized Files Into Modules
 
 - Level: `should`

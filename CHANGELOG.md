@@ -4,6 +4,7 @@ This repository uses a simple release-notes model instead of a heavyweight chang
 
 ## Unreleased
 
+- Added `should` guidance to keep workflow config thin and extract non-trivial inline scripts into repo-owned files, plus matching downstream summary wording in managed templates
 - Initial standards corpus for architecture, code shape, testing, Rust, and TypeScript/JavaScript
 - Downstream adoption templates for `AGENTS.md`, `CONTRIBUTING.md`, overrides, and PRs
 - Optional Codex skill for applying or reviewing against the standards
